@@ -49,13 +49,14 @@ Deno.serve(async (req) => {
       case 'daily': {
         const now = Math.floor(Date.now() / 1000);
         const from = now - 365 * 86400;
-        const res = await fetch(
-          `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${apiKey}`
-        );
-        const data = await res.json();
-        console.log('Finnhub candle response status:', data.s, 'keys:', Object.keys(data));
+        const candleUrl = `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${apiKey}`;
+        console.log('Fetching candle URL:', candleUrl.replace(apiKey, '***'));
+        const res = await fetch(candleUrl);
+        const rawText = await res.text();
+        console.log('Finnhub candle raw response:', rawText.slice(0, 300));
+        let data;
+        try { data = JSON.parse(rawText); } catch { return jsonResponse({ error: 'Invalid response from Finnhub', data: null, fallback: true }); }
         if (data.s !== 'ok' || !data.t) {
-          console.log('Finnhub candle raw:', JSON.stringify(data).slice(0, 500));
           return jsonResponse({ error: 'No daily data available', data: null, fallback: true });
         }
         const candles = data.t.map((timestamp: number, i: number) => ({
