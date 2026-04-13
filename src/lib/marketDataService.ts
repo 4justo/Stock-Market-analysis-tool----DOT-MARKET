@@ -46,12 +46,15 @@ async function callMarketData(params: Record<string, string>) {
     },
   });
 
-  if (!response.ok) {
-    const errBody = await response.json().catch(() => ({}));
-    throw new Error(errBody.error || `HTTP ${response.status}`);
+  const result = await response.json().catch(() => ({}));
+
+  // Handle rate limiting or fallback responses gracefully
+  if (!response.ok || result.fallback || result.error === 'rate_limited') {
+    console.warn('Market data fallback triggered:', result.error || response.status);
+    return { data: null, fallback: true };
   }
 
-  return response.json();
+  return result;
 }
 
 export async function fetchStockQuote(symbol: string): Promise<StockQuote | null> {

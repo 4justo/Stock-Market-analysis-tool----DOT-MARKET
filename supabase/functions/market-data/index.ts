@@ -80,14 +80,15 @@ Deno.serve(async (req) => {
     const response = await fetch(avUrl);
     const data = await response.json();
 
-    // Check for API error/rate limit
+    // Check for API error/rate limit - return 200 with fallback flag so client handles gracefully
     if (data['Note'] || data['Information']) {
       return new Response(JSON.stringify({ 
         error: 'rate_limited', 
         message: data['Note'] || data['Information'],
-        data: null 
+        data: null,
+        fallback: true 
       }), {
-        status: 429,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
