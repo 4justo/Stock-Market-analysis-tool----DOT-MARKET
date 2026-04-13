@@ -3,16 +3,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ALPHA_VANTAGE_BASE = 'https://www.alphavantage.co/query';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const apiKey = Deno.env.get('ALPHA_VANTAGE_API_KEY');
+  const apiKey = Deno.env.get('FINNHUB_API_KEY');
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'ALPHA_VANTAGE_API_KEY not configured' }), {
+    return new Response(JSON.stringify({ error: 'FINNHUB_API_KEY not configured' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -23,146 +23,98 @@ Deno.serve(async (req) => {
     const endpoint = url.searchParams.get('endpoint') || 'quote';
     const symbol = url.searchParams.get('symbol') || 'AAPL';
 
-    let avUrl: string;
-
-    switch (endpoint) {
-      case 'quote':
-        avUrl = `${ALPHA_VANTAGE_BASE}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
-        break;
-      case 'intraday':
-        avUrl = `${ALPHA_VANTAGE_BASE}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&outputsize=full&apikey=${apiKey}`;
-        break;
-      case 'daily':
-        avUrl = `${ALPHA_VANTAGE_BASE}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${apiKey}`;
-        break;
-      case 'overview':
-        avUrl = `${ALPHA_VANTAGE_BASE}?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`;
-        break;
-      case 'search':
-        const keywords = url.searchParams.get('keywords') || symbol;
-        avUrl = `${ALPHA_VANTAGE_BASE}?function=SYMBOL_SEARCH&keywords=${keywords}&apikey=${apiKey}`;
-        break;
-      case 'batch':
-        // Fetch quotes for multiple symbols
-        const symbols = url.searchParams.get('symbols') || 'AAPL,MSFT,GOOGL';
-        const batchResults = [];
-        for (const sym of symbols.split(',').slice(0, 8)) {
-          const batchUrl = `${ALPHA_VANTAGE_BASE}?function=GLOBAL_QUOTE&symbol=${sym.trim()}&apikey=${apiKey}`;
-          const batchRes = await fetch(batchUrl);
-          const batchData = await batchRes.json();
-          if (batchData['Global Quote'] && batchData['Global Quote']['01. symbol']) {
-            const q = batchData['Global Quote'];
-            batchResults.push({
-              ticker: q['01. symbol'],
-              price: parseFloat(q['05. price']),
-              change: parseFloat(q['10. change percent']?.replace('%', '') || '0'),
-              volume: parseInt(q['06. volume'] || '0'),
-              high: parseFloat(q['03. high'] || '0'),
-              low: parseFloat(q['04. low'] || '0'),
-              open: parseFloat(q['02. open'] || '0'),
-              previousClose: parseFloat(q['08. previous close'] || '0'),
-            });
-          }
-          // Small delay to respect rate limits
-          await new Promise(r => setTimeout(r, 250));
-        }
-        return new Response(JSON.stringify({ data: batchResults, source: 'alpha_vantage' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-
-      default:
-        return new Response(JSON.stringify({ error: `Unknown endpoint: ${endpoint}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
-
-    const response = await fetch(avUrl);
-    const data = await response.json();
-
-    // Check for API error/rate limit - return 200 with fallback flag so client handles gracefully
-    if (data['Note'] || data['Information']) {
-      return new Response(JSON.stringify({ 
-        error: 'rate_limited', 
-        message: data['Note'] || data['Information'],
-        data: null,
-        fallback: true 
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Transform data based on endpoint
-    let transformed;
     switch (endpoint) {
       case 'quote': {
-        const q = data['Global Quote'];
-        if (!q || !q['01. symbol']) {
-          return new Response(JSON.stringify({ error: 'Invalid symbol or no data', data: null }), {
-            status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+        const res = await fetch(`${FINNHUB_BASE}/quote?symbol=${symbol}&token=${apiKey}`);
+        const q = await res.json();
+        if (!q || q.c === 0) {
+          return jsonResponse({ error: 'No data for symbol', data: null }, 404);
         }
-        transformed = {
-          ticker: q['01. symbol'],
-          price: parseFloat(q['05. price']),
-          open: parseFloat(q['02. open']),
-          high: parseFloat(q['03. high']),
-          low: parseFloat(q['04. low']),
-          volume: parseInt(q['06. volume']),
-          previousClose: parseFloat(q['08. previous close']),
-          change: parseFloat(q['09. change']),
-          changePercent: parseFloat(q['10. change percent']?.replace('%', '') || '0'),
-        };
-        break;
+        return jsonResponse({
+          data: {
+            ticker: symbol,
+            price: q.c,
+            open: q.o,
+            high: q.h,
+            low: q.l,
+            previousClose: q.pc,
+            change: q.d,
+            changePercent: q.dp,
+            volume: 0, // quote endpoint doesn't include volume
+          },
+          source: 'finnhub',
+        });
       }
-      case 'daily': {
-        const timeSeries = data['Time Series (Daily)'];
-        if (!timeSeries) {
-          return new Response(JSON.stringify({ error: 'No daily data available', data: null }), {
-            status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        transformed = Object.entries(timeSeries).slice(0, 100).map(([date, values]: [string, any]) => ({
-          date,
-          open: parseFloat(values['1. open']),
-          high: parseFloat(values['2. high']),
-          low: parseFloat(values['3. low']),
-          close: parseFloat(values['4. close']),
-          volume: parseInt(values['5. volume']),
-        })).reverse();
-        break;
-      }
-      case 'intraday': {
-        const timeSeries = data['Time Series (5min)'];
-        if (!timeSeries) {
-          return new Response(JSON.stringify({ error: 'No intraday data available', data: null }), {
-            status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        transformed = Object.entries(timeSeries).slice(0, 78).map(([datetime, values]: [string, any]) => ({
-          date: datetime,
-          open: parseFloat(values['1. open']),
-          high: parseFloat(values['2. high']),
-          low: parseFloat(values['3. low']),
-          close: parseFloat(values['4. close']),
-          volume: parseInt(values['5. volume']),
-        })).reverse();
-        break;
-      }
-      case 'overview':
-        transformed = data;
-        break;
-      default:
-        transformed = data;
-    }
 
-    return new Response(JSON.stringify({ data: transformed, source: 'alpha_vantage' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+      case 'daily': {
+        const now = Math.floor(Date.now() / 1000);
+        const from = now - 365 * 86400;
+        const res = await fetch(
+          `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.s !== 'ok' || !data.t) {
+          return jsonResponse({ error: 'No daily data available', data: null, fallback: true });
+        }
+        const candles = data.t.map((timestamp: number, i: number) => ({
+          date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+          open: data.o[i],
+          high: data.h[i],
+          low: data.l[i],
+          close: data.c[i],
+          volume: data.v[i],
+        }));
+        return jsonResponse({ data: candles, source: 'finnhub' });
+      }
+
+      case 'intraday': {
+        const now = Math.floor(Date.now() / 1000);
+        const from = now - 86400; // last 24h
+        const res = await fetch(
+          `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=5&from=${from}&to=${now}&token=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.s !== 'ok' || !data.t) {
+          return jsonResponse({ error: 'No intraday data available', data: null, fallback: true });
+        }
+        const candles = data.t.map((timestamp: number, i: number) => ({
+          date: new Date(timestamp * 1000).toISOString(),
+          open: data.o[i],
+          high: data.h[i],
+          low: data.l[i],
+          close: data.c[i],
+          volume: data.v[i],
+        }));
+        return jsonResponse({ data: candles, source: 'finnhub' });
+      }
+
+      case 'batch': {
+        const symbols = (url.searchParams.get('symbols') || 'AAPL,MSFT,GOOGL').split(',').slice(0, 10);
+        const results = [];
+        for (const sym of symbols) {
+          const s = sym.trim();
+          const res = await fetch(`${FINNHUB_BASE}/quote?symbol=${s}&token=${apiKey}`);
+          const q = await res.json();
+          if (q && q.c !== 0) {
+            results.push({
+              ticker: s,
+              price: q.c,
+              change: q.dp,
+              volume: 0,
+              high: q.h,
+              low: q.l,
+              open: q.o,
+              previousClose: q.pc,
+            });
+          }
+          await new Promise(r => setTimeout(r, 100));
+        }
+        return jsonResponse({ data: results, source: 'finnhub' });
+      }
+
+      default:
+        return jsonResponse({ error: `Unknown endpoint: ${endpoint}` }, 400);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Market data error:', message);
@@ -172,3 +124,10 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
