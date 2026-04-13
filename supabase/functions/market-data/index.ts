@@ -53,7 +53,9 @@ Deno.serve(async (req) => {
           `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${apiKey}`
         );
         const data = await res.json();
+        console.log('Finnhub candle response status:', data.s, 'keys:', Object.keys(data));
         if (data.s !== 'ok' || !data.t) {
+          console.log('Finnhub candle raw:', JSON.stringify(data).slice(0, 500));
           return jsonResponse({ error: 'No daily data available', data: null, fallback: true });
         }
         const candles = data.t.map((timestamp: number, i: number) => ({
