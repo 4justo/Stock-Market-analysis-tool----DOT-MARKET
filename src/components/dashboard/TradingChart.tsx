@@ -65,12 +65,18 @@ const TradingChart = () => {
       };
     });
 
-    const predictions = candles.map((c: any) => ({
+    // Sort and deduplicate by time (lightweight-charts requires unique ascending times)
+    candles.sort((a: any, b: any) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+    const uniqueCandles = candles.filter((item: any, index: number, self: any[]) =>
+      index === 0 || item.time !== self[index - 1].time
+    );
+
+    const predictions = uniqueCandles.map((c: any) => ({
       time: c.time,
       value: +(c.close + (Math.random() - 0.3) * 3).toFixed(2),
     }));
 
-    const volumes = candles.map((c: any) => ({
+    const volumes = uniqueCandles.map((c: any) => ({
       time: c.time,
       value: c.volume,
       color:
@@ -79,7 +85,7 @@ const TradingChart = () => {
           : "rgba(255, 75, 75, 0.15)",
     }));
 
-    return { candles, predictions, volumes };
+    return { candles: uniqueCandles, predictions, volumes };
   }, [dailyData, intradayData, activeFilter]);
 
   const isLoading = dailyLoading && intradayLoading;
