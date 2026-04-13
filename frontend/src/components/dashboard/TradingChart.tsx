@@ -5,7 +5,24 @@ import { generateCandlestickData } from "@/lib/mockData";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wifi } from "lucide-react";
 
-const timeFilters = ["1D", "1W", "1M", "3M", "1Y"] as const;
+const timeFilters = ["5M", "15M", "1H", "4H", "1D", "1W", "1M", "3M", "1Y"] as const;
+
+const resampleCandles = (candles: any[], intervalMinutes: number) => {
+  if (intervalMinutes === 1) return candles;
+  const resampled = [];
+  for (let i = 0; i < candles.length; i += intervalMinutes) {
+    const group = candles.slice(i, i + intervalMinutes);
+    if (group.length === 0) continue;
+    const open = group[0].open;
+    const close = group[group.length - 1].close;
+    const high = Math.max(...group.map(c => c.high));
+    const low = Math.min(...group.map(c => c.low));
+    const volume = group.reduce((sum, c) => sum + c.volume, 0);
+    const time = group[0].time; // Use first time
+    resampled.push({ time, open, high, low, close, volume });
+  }
+  return resampled;
+};
 
 const TradingChart = () => {
   const [activeFilter, setActiveFilter] = useState<string>("3M");
@@ -22,21 +39,30 @@ const TradingChart = () => {
 
   const chartData = useMemo(() => {
     let sourceData: any[];
+    let intervalMinutes = 1;
 
-    if (activeFilter === "1D" && intradayData && intradayData.length > 0) {
+    const intradayFilters = ["5M", "15M", "1H", "4H", "1D"];
+    if (intradayFilters.includes(activeFilter) && intradayData && intradayData.length > 0) {
       sourceData = intradayData;
+      intervalMinutes = { "5M": 5, "15M": 15, "1H": 60, "4H": 240, "1D": 1 }[activeFilter] || 1;
     } else if (dailyData && dailyData.length > 0) {
+      sourceData = dailyData;
       const sliceDays =
-        { "1D": 1, "1W": 5, "1M": 22, "3M": 66, "1Y": 100 }[activeFilter] || 66;
+        { "1W": 5, "1M": 22, "3M": 66, "1Y": 100 }[activeFilter] || 66;
       sourceData = dailyData.slice(-sliceDays);
     } else {
       const mockDays =
-        { "1D": 1, "1W": 7, "1M": 30, "3M": 90, "1Y": 365 }[activeFilter] || 90;
+        { "1W": 7, "1M": 30, "3M": 90, "1Y": 365 }[activeFilter] || 90;
       const mock = generateCandlestickData(365);
       sourceData = mock.slice(-mockDays);
     }
 
-    const candles = sourceData.map((d: any) => {
+    let processedData = sourceData;
+    if (intervalMinutes > 1) {
+      processedData = resampleCandles(sourceData, intervalMinutes);
+    }
+
+    const candles = processedData.map((d: any) => {
       let time: string;
       if (d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) {
         // Already yyyy-mm-dd
@@ -119,7 +145,7 @@ const TradingChart = () => {
       },
       timeScale: {
         borderColor: "#2d3748",
-        timeVisible: activeFilter === "1D",
+        timeVisible: intradayFilters.includes(activeFilter),
       },
     });
 
