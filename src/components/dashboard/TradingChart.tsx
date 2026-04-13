@@ -76,7 +76,7 @@ const TradingChart = () => {
       value: +(c.close + (Math.random() - 0.3) * 3).toFixed(2),
     }));
 
-    const volumes = candles.map((c: any) => ({
+    const volumes = uniqueCandles.map((c: any) => ({
       time: c.time,
       value: c.volume,
       color:
