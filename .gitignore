@@ -7,10 +7,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
-*.local
+frontend/dist
+
+# Local environment files
+.env
+frontend/.env
+backend/.env
+ai-engine/.env
+
+# Python artifacts
+.venv/
+__pycache__/
+*.py[cod]
+
+# Generated files
+backend/src/generated/
 
 # Editor directories and files
 .vscode/*
