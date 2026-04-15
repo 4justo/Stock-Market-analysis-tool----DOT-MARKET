@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  name      String?
+  avatar    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  portfolio Portfolio?
+  watchlist Watchlist[]
+  trades    Trade[]
+}
+
+model Stock {
+  id        String    @id @default(cuid())
+  symbol    String    @unique
+  name      String
+  price     Float
+  change    Float?
+  changePercent Float?
+  volume    Int?
+  marketCap Float?
+  pe        Float?
+  lastUpdate DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  predictions Prediction[]
+  sentiments  Sentiment[]
+  candles     Candle[]
+  technical   TechnicalIndicator[]
+  watchlistItems Watchlist[]
+}
+
+model Candle {
+  id        String    @id @default(cuid())
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId   String
+  timestamp DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([stockId, timestamp])
+}
+
+model TechnicalIndicator {
+  id        String    @id @default(cuid())
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId   String
+  type      String    // SMA, EMA, RSI, MACD, Bollinger Bands
+  period    Int
+  value     Float
+  timestamp DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([stockId, type, timestamp])
+}
+
+model Prediction {
+  id              String    @id @default(cuid())
+  stock           Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId         String
+  symbol          String
+  model           String    // LSTM, GRU, Random Forest, etc.
+  predictedPrice  Float
+  confidence      Float     // 0-1
+  timeframe       String    // 1d, 1w, 1mo
+  actualPrice     Float?
+  accuracy        Float?    // calculated after timeframe
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([stockId, model, timeframe])
+}
+
+model Sentiment {
+  id        String    @id @default(cuid())
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId   String
+  symbol    String
+  score     Float     // -1 to 1
+  label     String    // positive, neutral, negative
+  source    String    // twitter, news, reddit
+  mentions  Int
+  createdAt DateTime  @default(now())
+
+  @@index([stockId, createdAt])
+}
+
+model Portfolio {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String    @unique
+  totalValue Float    @default(0)
+  cash      Float     @default(0)
+  trades    Trade[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Trade {
+  id        String    @id @default(cuid())
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolioId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  symbol    String
+  type      String    // BUY, SELL
+  quantity  Int
+  price     Float
+  total     Float
+  fee       Float     @default(0)
+  status    String    @default("EXECUTED") // PENDING, EXECUTED, CANCELLED
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, symbol, createdAt])
+}
+
+model Watchlist {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId   String
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, stockId])
+  @@index([userId])
+}
+
+model BacktestResult {
+  id        String    @id @default(cuid())
+  strategy  String
+  symbol    String
+  startDate DateTime
+  endDate   DateTime
+  totalReturn Float
+  maxDrawdown Float
+  sharpeRatio Float
+  trades    Int
+  winRate   Float
+  result    Json
+  createdAt DateTime  @default(now())
+
+  @@index([symbol, createdAt])
+}
