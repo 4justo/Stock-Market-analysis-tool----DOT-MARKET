@@ -45,7 +45,7 @@ Before running this project, make sure you have the following installed:
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/4justo/Stock-Market-analysis-tool----DOT-MARKET.git
    cd dot-market-ai-pro
    ```
 
