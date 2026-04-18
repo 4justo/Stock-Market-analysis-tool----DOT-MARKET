@@ -3,8 +3,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FINNHUB_BASE = 'https://finnhub.io/api/v1';
-
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -12,7 +10,49 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-// Yahoo Finance chart API (free, no key needed)
+async function fetchYahooQuote(symbol: string) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=5m`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  const data = await res.json();
+  const result = data?.chart?.result?.[0];
+  if (!result) return null;
+  
+  const meta = result.meta;
+  const quote = result.indicators?.quote?.[0];
+  const currentPrice = meta.regularMarketPrice || meta.previousClose;
+  const previousClose = meta.chartPreviousClose || meta.previousClose;
+  
+  return {
+    ticker: symbol,
+    price: currentPrice,
+    open: meta.regularMarketOpen || quote?.open?.[quote.open.length - 1] || currentPrice,
+    high: meta.regularMarketDayHigh || quote?.high?.[quote.high.length - 1] || currentPrice,
+    low: meta.regularMarketDayLow || quote?.low?.[quote.low.length - 1] || currentPrice,
+    previousClose: previousClose,
+    change: currentPrice - previousClose,
+    changePercent: ((currentPrice - previousClose) / previousClose) * 100,
+    volume: meta.regularMarketVolume || 0,
+  };
+}
+
+async function fetchYahooBatchQuotes(symbols: string[]) {
+  const results = [];
+  for (const symbol of symbols.slice(0, 10)) {
+    try {
+      const quote = await fetchYahooQuote(symbol);
+      if (quote) {
+        results.push(quote);
+      }
+    } catch (e) {
+      console.error(`Failed to fetch ${symbol}:`, e);
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return results;
+}
+
 async function fetchYahooCandles(symbol: string, range: string, interval: string) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=${interval}&includePrePost=false`;
   const res = await fetch(url, {
@@ -35,14 +75,26 @@ async function fetchYahooCandles(symbol: string, range: string, interval: string
   })).filter((c: any) => c.open != null && c.close != null);
 }
 
+async function fetchStockNews(symbol: string) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${symbol}&newsCount=10&enableFuzzyParams=false`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  const data = await res.json();
+  const news = data?.news || [];
+  
+  return news.map((item: any) => ({
+    title: item.title,
+    source: item.publisher || 'Yahoo Finance',
+    url: item.link,
+    publishedAt: item.publishedTime ? new Date(item.publishedTime * 1000).toISOString() : new Date().toISOString(),
+    sentiment: item.thumbnail?.primaryColor === 'green' ? 'bullish' : item.thumbnail?.primaryColor === 'red' ? 'bearish' : 'neutral',
+  }));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
-  }
-
-  const apiKey = Deno.env.get('FINNHUB_API_KEY');
-  if (!apiKey) {
-    return jsonResponse({ error: 'FINNHUB_API_KEY not configured' }, 500);
   }
 
   try {
@@ -52,25 +104,11 @@ Deno.serve(async (req) => {
 
     switch (endpoint) {
       case 'quote': {
-        const res = await fetch(`${FINNHUB_BASE}/quote?symbol=${symbol}&token=${apiKey}`);
-        const q = await res.json();
-        if (!q || q.c === 0) {
+        const quote = await fetchYahooQuote(symbol);
+        if (!quote) {
           return jsonResponse({ error: 'No data for symbol', data: null }, 404);
         }
-        return jsonResponse({
-          data: {
-            ticker: symbol,
-            price: q.c,
-            open: q.o,
-            high: q.h,
-            low: q.l,
-            previousClose: q.pc,
-            change: q.d,
-            changePercent: q.dp,
-            volume: 0,
-          },
-          source: 'finnhub',
-        });
+        return jsonResponse({ data: quote, source: 'yahoo' });
       }
 
       case 'daily': {
@@ -91,26 +129,13 @@ Deno.serve(async (req) => {
 
       case 'batch': {
         const symbols = (url.searchParams.get('symbols') || 'AAPL,MSFT,GOOGL').split(',').slice(0, 10);
-        const results = [];
-        for (const sym of symbols) {
-          const s = sym.trim();
-          const res = await fetch(`${FINNHUB_BASE}/quote?symbol=${s}&token=${apiKey}`);
-          const q = await res.json();
-          if (q && q.c !== 0) {
-            results.push({
-              ticker: s,
-              price: q.c,
-              change: q.dp,
-              volume: 0,
-              high: q.h,
-              low: q.l,
-              open: q.o,
-              previousClose: q.pc,
-            });
-          }
-          await new Promise(r => setTimeout(r, 100));
-        }
-        return jsonResponse({ data: results, source: 'finnhub' });
+        const results = await fetchYahooBatchQuotes(symbols);
+        return jsonResponse({ data: results, source: 'yahoo' });
+      }
+
+      case 'news': {
+        const news = await fetchStockNews(symbol);
+        return jsonResponse({ data: news, source: 'yahoo' });
       }
 
       default:
