@@ -1,21 +1,48 @@
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { useModels } from "@/hooks/useMarketData";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from "recharts";
-
-const accuracyData = Array.from({ length: 30 }, (_, i) => ({
-  day: `Day ${i + 1}`,
-  accuracy: 85 + Math.random() * 10,
-}));
-
-const featureImportance = [
-  { name: 'Price History', value: 32 },
-  { name: 'Volume', value: 22 },
-  { name: 'RSI', value: 18 },
-  { name: 'MACD', value: 14 },
-  { name: 'Sentiment', value: 9 },
-  { name: 'Volatility', value: 5 },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle } from "lucide-react";
 
 const AIInsights = () => {
+  const { data: models, isLoading, error, refetch } = useModels();
+
+  const accuracyData = models?.accuracy_history || []
+
+  const featureImportance = models?.feature_importance || [];
+  const modelList = models?.models ? Object.values(models.models) : [];
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground">AI Insights</h1>
+          <p className="text-sm text-muted-foreground">Model performance, feature importance, and training analytics</p>
+        </div>
+        <div className="glass-card p-12 flex flex-col items-center justify-center">
+          <AlertCircle className="h-12 w-12 text-bearish mb-4" />
+          <p className="text-muted-foreground mb-4">Failed to load AI models</p>
+          <button onClick={() => refetch()} className="text-primary hover:underline">Retry</button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground">AI Insights</h1>
+          <p className="text-sm text-muted-foreground">Model performance, feature importance, and training analytics</p>
+        </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Skeleton className="h-[350px]" />
+          <Skeleton className="h-[350px]" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -55,18 +82,20 @@ const AIInsights = () => {
 
       {/* Model details */}
       <div className="grid sm:grid-cols-3 gap-4 mt-6">
-        {[
-          { name: 'LSTM Neural Network', accuracy: '92.4%', status: 'Active', epochs: 150 },
-          { name: 'Random Forest', accuracy: '89.1%', status: 'Active', trees: 500 },
-          { name: 'Prophet Time-Series', accuracy: '86.7%', status: 'Active', horizon: '30d' },
-        ].map((model) => (
+        {modelList.map((model) => (
           <div key={model.name} className="glass-card p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-semibold text-foreground">{model.name}</span>
-              <span className="text-xs px-2 py-1 rounded-full bg-bullish/20 text-bullish">{model.status}</span>
+              <span className="text-xs px-2 py-1 rounded-full bg-bullish/20 text-bullish capitalize">{model.status}</span>
             </div>
-            <div className="text-2xl font-bold text-primary mb-1">{model.accuracy}</div>
+            <div className="text-2xl font-bold text-primary mb-1">{model.accuracy.toFixed(1)}%</div>
             <div className="text-xs text-muted-foreground">Accuracy</div>
+            {model.epochs && (
+              <div className="text-xs text-muted-foreground mt-2">Epochs: {model.epochs}</div>
+            )}
+            {model.trees && (
+              <div className="text-xs text-muted-foreground mt-2">Trees: {model.trees}</div>
+            )}
           </div>
         ))}
       </div>

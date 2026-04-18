@@ -1,9 +1,24 @@
 import { useTopStocks } from "@/hooks/useMarketData";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const StocksTable = () => {
-  const { data: stocks, isLoading } = useTopStocks();
+  const { data: stocks, isLoading, error, refetch } = useTopStocks();
+
+  if (error) {
+    return (
+      <div className="glass-card p-6 flex flex-col items-center justify-center py-12">
+        <AlertCircle className="h-8 w-8 text-bearish mb-3" />
+        <p className="text-muted-foreground mb-3">Failed to load stocks</p>
+        <button
+          onClick={() => refetch()}
+          className="text-sm text-primary hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="glass-card p-6">

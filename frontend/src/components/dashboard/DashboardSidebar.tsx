@@ -1,9 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Globe, Brain, Briefcase, Lightbulb,
-  History, Settings, Zap, ChevronLeft, ChevronRight
+  History, Settings, Zap, ChevronLeft, ChevronRight, Circle
 } from "lucide-react";
 import { useState } from "react";
+import { useSystemStatus } from "@/hooks/useMarketData";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -18,6 +19,9 @@ const menuItems = [
 const DashboardSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { data: status } = useSystemStatus();
+
+  const isLive = status?.denoProxy && status?.aiEngine;
 
   return (
     <aside className={`${collapsed ? 'w-16' : 'w-64'} h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 flex-shrink-0`}>
@@ -27,6 +31,18 @@ const DashboardSidebar = () => {
           <span className="text-primary-foreground font-bold text-sm">D</span>
         </div>
         {!collapsed && <span className="ml-3 text-lg font-bold text-foreground">DOT-MARKET</span>}
+      </div>
+
+      {/* Status Indicator */}
+      <div className="px-3 py-2 border-b border-sidebar-border">
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sidebar-accent/50">
+          <Circle
+            className={`w-2 h-2 ${isLive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500'}`}
+          />
+          <span className="text-xs font-medium text-sidebar-foreground">
+            {isLive ? 'System Online' : 'System Offline'}
+          </span>
+        </div>
       </div>
 
       {/* Menu */}

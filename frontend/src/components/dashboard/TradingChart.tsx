@@ -1,126 +1,119 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { createChart, type IChartApi } from "lightweight-charts";
-import { useDailyCandles, useIntradayCandles } from "@/hooks/useMarketData";
-import { generateCandlestickData } from "@/lib/mockData";
+import { createChart, type IChartApi, type UTCTimestamp } from "lightweight-charts";
+import { useDailyCandles, useIntradayCandles, useStockQuote, useAIPrediction, STOCK_NAMES } from "@/hooks/useMarketData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wifi } from "lucide-react";
+import { Wifi, AlertCircle } from "lucide-react";
 
 const timeFilters = ["5M", "15M", "1H", "4H", "1D", "1W", "1M", "3M", "1Y"] as const;
 
-const resampleCandles = (candles: any[], intervalMinutes: number) => {
-  if (intervalMinutes === 1) return candles;
-  const resampled = [];
-  for (let i = 0; i < candles.length; i += intervalMinutes) {
-    const group = candles.slice(i, i + intervalMinutes);
-    if (group.length === 0) continue;
-    const open = group[0].open;
-    const close = group[group.length - 1].close;
-    const high = Math.max(...group.map(c => c.high));
-    const low = Math.min(...group.map(c => c.low));
-    const volume = group.reduce((sum, c) => sum + c.volume, 0);
-    const time = group[0].time; // Use first time
-    resampled.push({ time, open, high, low, close, volume });
-  }
-  return resampled;
-};
-
 const intradayTimeFilters = ["5M", "15M", "1H", "4H", "1D"] as const;
 
-const TradingChart = () => {
+const parseDateToTimestamp = (dateStr: string | undefined): UTCTimestamp => {
+  if (!dateStr) return Math.floor(Date.now() / 1000) as UTCTimestamp;
+  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return Math.floor(new Date(dateStr).getTime() / 1000) as UTCTimestamp;
+  }
+  if (dateStr.includes("T")) {
+    return Math.floor(new Date(dateStr).getTime() / 1000) as UTCTimestamp;
+  }
+  const dt = new Date(dateStr);
+  if (isNaN(dt.getTime())) {
+    return Math.floor(Date.now() / 1000) as UTCTimestamp;
+  }
+  return Math.floor(dt.getTime() / 1000) as UTCTimestamp;
+};
+
+interface TradingChartProps {
+  symbol: string;
+}
+
+const TradingChart = ({ symbol }: TradingChartProps) => {
   const [activeFilter, setActiveFilter] = useState<string>("3M");
-  const [symbol] = useState("AAPL");
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
-  const { data: dailyData, isLoading: dailyLoading } = useDailyCandles(symbol);
-  const { data: intradayData, isLoading: intradayLoading } = useIntradayCandles(symbol);
+  const { data: dailyData, isLoading: dailyLoading, error: dailyError, refetch: refetchDaily } = useDailyCandles(symbol);
+  const { data: intradayData, isLoading: intradayLoading, error: intradayError, refetch: refetchIntraday } = useIntradayCandles(symbol);
+  const { data: quote } = useStockQuote(symbol);
+  const currentPrice = quote?.price ?? 0;
+  const { data: aiPrediction, error: aiError } = useAIPrediction(symbol, currentPrice);
 
-  const isLive =
-    (dailyData && dailyData.length > 0) ||
-    (intradayData && intradayData.length > 0);
+  const isIntraday = intradayTimeFilters.includes(activeFilter as typeof intradayTimeFilters[number]);
+  const hasData = (dailyData && dailyData.length > 0) || (intradayData && intradayData.length > 0);
+  const hasError = dailyError || intradayError || aiError;
 
   const chartData = useMemo(() => {
-    let sourceData: any[];
-    let intervalMinutes = 1;
+    let sourceData: { date?: string; open: number; high: number; low: number; close: number; volume: number }[] = [];
 
-    if (intradayTimeFilters.includes(activeFilter as any) && intradayData && intradayData.length > 0) {
+    if (isIntraday && intradayData && intradayData.length > 0) {
       sourceData = intradayData;
-      intervalMinutes = { "5M": 5, "15M": 15, "1H": 60, "4H": 240, "1D": 1 }[activeFilter] || 1;
     } else if (dailyData && dailyData.length > 0) {
-      sourceData = dailyData;
-      const sliceDays =
-        { "1W": 5, "1M": 22, "3M": 66, "1Y": 100 }[activeFilter] || 66;
+      const sliceDays = { "1W": 5, "1M": 22, "3M": 66, "1Y": 252 }[activeFilter] || 66;
       sourceData = dailyData.slice(-sliceDays);
-    } else {
-      const mockDays =
-        { "1W": 7, "1M": 30, "3M": 90, "1Y": 365 }[activeFilter] || 90;
-      const mock = generateCandlestickData(365);
-      sourceData = mock.slice(-mockDays);
     }
 
-    let processedData = sourceData;
-    if (intervalMinutes > 1) {
-      processedData = resampleCandles(sourceData, intervalMinutes);
-    }
+    // Map to candle format
+    const candles = sourceData.map((d) => ({
+      time: parseDateToTimestamp(d.date),
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
 
-    const candles = processedData.map((d: any) => {
-      let time: string;
-      if (d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) {
-        // Already yyyy-mm-dd
-        time = d.date;
-      } else if (d.fullDate) {
-        // Mock data with fullDate
-        const dt = new Date(d.fullDate);
-        time = dt.toISOString().slice(0, 10);
-      } else if (d.date?.includes("T")) {
-        // Intraday datetime - use unix timestamp
-        time = String(Math.floor(new Date(d.date).getTime() / 1000));
-      } else {
-        // Fallback: try to parse, or generate sequential date
-        const dt = new Date(d.date);
-        time = isNaN(dt.getTime())
-          ? new Date(Date.now()).toISOString().slice(0, 10)
-          : dt.toISOString().slice(0, 10);
+    candles.sort((a, b) => Number(a.time) - Number(b.time));
+
+    // Get actual prices from data
+    const lastClose = candles.length > 0 ? candles[candles.length - 1].close : (currentPrice || 270);
+    const predictedPrice = aiPrediction?.predictedPrice ?? lastClose;
+    
+    // Prediction line - 5 days only with star at end
+    const predictions: { time: UTCTimestamp; value: number }[] = [];
+    const predictionStars: { time: UTCTimestamp; value: number }[] = [];
+    
+    if (candles.length > 0 && predictedPrice !== lastClose) {
+      const stepSec = 86400;
+      const lastTime = candles[candles.length - 1].time;
+      const predictionDays = 5;
+      
+      // Start from last close
+      predictions.push({ time: lastTime, value: lastClose });
+      
+      // Draw sloped line to predicted price over 5 days
+      for (let j = 1; j <= predictionDays; j++) {
+        const time = (Number(lastTime) + stepSec * j) as UTCTimestamp;
+        const progress = j / predictionDays;
+        const value = lastClose + (predictedPrice - lastClose) * progress;
+        
+        predictions.push({
+          time: time,
+          value: Number(value.toFixed(2)),
+        });
       }
-      return {
-        time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-        volume: d.volume,
-      };
-    });
+      
+      // Star at the predicted end point
+      predictionStars.push({
+        time: (Number(lastTime) + stepSec * predictionDays) as UTCTimestamp,
+        value: predictedPrice
+      });
+    }
 
-    // Sort and deduplicate by time (lightweight-charts requires unique ascending times)
-    candles.sort((a: any, b: any) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
-    const uniqueCandles = candles.filter((item: any, index: number, self: any[]) =>
-      index === 0 || item.time !== self[index - 1].time
-    );
-
-    const predictions = uniqueCandles.map((c: any) => ({
-      time: c.time,
-      value: +(c.close + (Math.random() - 0.3) * 3).toFixed(2),
+    const volumes = sourceData.map((d, i) => ({
+      time: candles[i].time,
+      value: d.volume,
+      color: d.close >= d.open ? "rgba(38, 198, 118, 0.5)" : "rgba(255, 75, 75, 0.5)",
     }));
 
-    const volumes = uniqueCandles.map((c: any) => ({
-      time: c.time,
-      value: c.volume,
-      color:
-        c.close >= c.open
-          ? "rgba(38, 198, 118, 0.15)"
-          : "rgba(255, 75, 75, 0.15)",
-    }));
+    return { candles, predictions, predictionStars, volumes };
+  }, [dailyData, intradayData, activeFilter, isIntraday, aiPrediction, currentPrice]);
 
-    return { candles: uniqueCandles, predictions, volumes };
-  }, [dailyData, intradayData, activeFilter]);
-
-  const isLoading = dailyLoading && intradayLoading;
+  const isLoading = dailyLoading || intradayLoading;
 
   useEffect(() => {
     if (!chartContainerRef.current || isLoading) return;
+    if (chartData.candles.length === 0) return;
 
-    // Clean up previous chart
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
@@ -146,13 +139,13 @@ const TradingChart = () => {
       },
       timeScale: {
         borderColor: "#2d3748",
-        timeVisible: intradayTimeFilters.includes(activeFilter as any),
+        timeVisible: isIntraday,
+        secondsVisible: false,
       },
     });
 
     chartRef.current = chart;
 
-    // Candlestick series
     const candleSeries = chart.addCandlestickSeries({
       upColor: "#26c676",
       downColor: "#ff4b4b",
@@ -161,30 +154,42 @@ const TradingChart = () => {
       wickUpColor: "#26c676",
       wickDownColor: "#ff4b4b",
     });
-    candleSeries.setData(chartData.candles as any);
+    candleSeries.setData(chartData.candles);
 
-    // AI Prediction line
     const predictionSeries = chart.addLineSeries({
       color: "#00bfff",
       lineWidth: 2,
       lineStyle: 2,
       crosshairMarkerVisible: false,
     });
-    predictionSeries.setData(chartData.predictions as any);
+    predictionSeries.setData(chartData.predictions);
 
-    // Volume histogram
+    // Star markers at predicted end point
+    if (chartData.predictionStars && chartData.predictionStars.length > 0) {
+      const lastPred = chartData.predictionStars[chartData.predictionStars.length - 1];
+      predictionSeries.setMarkers([
+        {
+          time: lastPred.time,
+          position: 'aboveBar',
+          shape: 'star',
+          text: `$${lastPred.value.toFixed(2)}`,
+          color: '#00bfff',
+          size: 14,
+        },
+      ]);
+    }
+
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "volume",
     });
-    volumeSeries.setData(chartData.volumes as any);
+    volumeSeries.setData(chartData.volumes);
     chart.priceScale("volume").applyOptions({
       scaleMargins: { top: 0.8, bottom: 0 },
     });
 
     chart.timeScale().fitContent();
 
-    // Resize observer
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current) {
         chart.applyOptions({ width: chartContainerRef.current.clientWidth });
@@ -197,7 +202,7 @@ const TradingChart = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [chartData, isLoading, activeFilter]);
+  }, [chartData, isLoading, isIntraday]);
 
   return (
     <div className="glass-card p-6">
@@ -205,19 +210,12 @@ const TradingChart = () => {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold text-foreground">
-              {symbol} — Apple Inc.
+              {symbol} — {STOCK_NAMES[symbol] || symbol}
             </h3>
-            {isLive && <Wifi className="h-4 w-4 text-bullish" />}
-            {!isLive && !isLoading && (
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                Mock
-              </span>
-            )}
+            {hasData && <Wifi className="h-4 w-4 text-bullish" />}
           </div>
           <p className="text-sm text-muted-foreground">
-            {isLive
-              ? "Live market data via Alpha Vantage"
-              : "Simulated data — API fallback"}
+            {hasData ? "Live market data via Yahoo Finance" : "Loading market data..."}
           </p>
         </div>
         <div className="flex gap-1 bg-muted rounded-lg p-1">
@@ -239,29 +237,46 @@ const TradingChart = () => {
 
       {isLoading ? (
         <Skeleton className="w-full h-[400px]" />
+      ) : hasError ? (
+        <div className="w-full h-[400px] flex flex-col items-center justify-center text-muted-foreground">
+          <AlertCircle className="h-12 w-12 mb-4 text-bearish" />
+          <p>Failed to load chart data</p>
+          <button
+            onClick={() => { refetchDaily(); refetchIntraday(); }}
+            className="text-sm text-primary hover:underline mt-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : !hasData ? (
+        <div className="w-full h-[400px] flex flex-col items-center justify-center text-muted-foreground">
+          <AlertCircle className="h-12 w-12 mb-4 opacity-50" />
+          <p>No data available for {symbol}</p>
+          <p className="text-sm">Check your connection or try another symbol</p>
+        </div>
       ) : (
         <div ref={chartContainerRef} className="w-full h-[400px]" />
       )}
 
-      <div className="flex items-center gap-6 mt-4 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-bullish/80" />
-          <span>Bullish</span>
+      {hasData && (
+        <div className="flex items-center gap-6 mt-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm bg-bullish/80" />
+            <span>Bullish</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm bg-bearish/80" />
+            <span>Bearish</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div
+              className="w-4 h-0.5"
+              style={{ borderBottom: "2px dashed hsl(195, 100%, 50%)" }}
+            />
+            <span>AI Prediction</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-bearish/80" />
-          <span>Bearish</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className="w-4 h-0.5"
-            style={{
-              borderBottom: "2px dashed hsl(195, 100%, 50%)",
-            }}
-          />
-          <span>AI Prediction</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

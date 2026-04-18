@@ -1,9 +1,26 @@
-import { DollarSign, TrendingUp, Target, BarChart3, Wifi, WifiOff } from "lucide-react";
+import { DollarSign, TrendingUp, Target, BarChart3, Wifi, AlertCircle } from "lucide-react";
 import { useMetrics } from "@/hooks/useMarketData";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const MetricsCards = () => {
-  const { data, isLoading } = useMetrics('AAPL');
+interface MetricsCardsProps {
+  symbol: string;
+}
+
+const MetricsCards = ({ symbol }: MetricsCardsProps) => {
+  const { data, isLoading, error, refetch } = useMetrics(symbol);
+
+  const getSentimentLabel = (sentiment: string | undefined) => {
+    if (!sentiment) return '--';
+    if (sentiment === 'bullish') return 'Bullish';
+    if (sentiment === 'bearish') return 'Bearish';
+    return 'Neutral';
+  };
+
+  const getSentimentChange = (sentiment: string | undefined, score: number | undefined) => {
+    if (!sentiment || score === undefined) return '';
+    const sign = score >= 0 ? '+' : '';
+    return `${sign}${(score * 100).toFixed(0)}%`;
+  };
 
   const metrics = [
     {
@@ -12,7 +29,7 @@ const MetricsCards = () => {
       change: data ? `${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%` : '',
       positive: data ? data.changePercent >= 0 : true,
       icon: DollarSign,
-      sub: data?.ticker || 'AAPL',
+      sub: data?.ticker || symbol,
     },
     {
       label: "Predicted Price",
@@ -20,25 +37,42 @@ const MetricsCards = () => {
       change: data ? `${((data.predictedPrice - data.currentPrice) / data.currentPrice * 100).toFixed(2)}%` : '',
       positive: data ? data.predictedPrice >= data.currentPrice : true,
       icon: TrendingUp,
-      sub: "24h forecast",
+      sub: "AI forecast",
     },
     {
       label: "Prediction Confidence",
-      value: data ? `${data.confidence}%` : '--',
-      change: data ? (data.confidence >= 85 ? 'High' : 'Moderate') : '',
-      positive: data ? data.confidence >= 85 : true,
+      value: data ? `${data.confidence.toFixed(1)}%` : '--',
+      change: data ? (data.confidence >= 70 ? 'High' : data.confidence >= 50 ? 'Moderate' : 'Low') : '',
+      positive: data ? data.confidence >= 50 : true,
       icon: Target,
-      sub: "Model accuracy",
+      sub: "LSTM model",
     },
     {
       label: "Market Sentiment",
-      value: data ? (data.trend === 'bullish' ? 'Bullish' : 'Bearish') : '--',
-      change: data ? `${data.confidence}% confidence` : '',
-      positive: data ? data.trend === 'bullish' : true,
+      value: data ? getSentimentLabel(data.sentiment) : '--',
+      change: data ? getSentimentChange(data.sentiment, data.sentimentScore) : '',
+      positive: data ? data.sentiment === 'bullish' : true,
       icon: BarChart3,
       sub: "AI analysis",
     },
   ];
+
+  if (error) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="glass-card p-5 col-span-full flex flex-col items-center justify-center py-8">
+          <AlertCircle className="h-8 w-8 text-bearish mb-3" />
+          <p className="text-muted-foreground mb-3">Failed to load metrics</p>
+          <button
+            onClick={() => refetch()}
+            className="text-sm text-primary hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
