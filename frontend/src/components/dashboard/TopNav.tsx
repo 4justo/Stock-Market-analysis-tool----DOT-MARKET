@@ -1,6 +1,8 @@
-import { Search, Bell, User, ChevronDown, Circle, Wifi, WifiOff, Brain, BrainCircuit } from "lucide-react";
+import { Search, Bell, User, Circle, Wifi, BrainCircuit, LogOut } from "lucide-react";
 import { useSelectedStock, STOCK_SYMBOLS, STOCK_NAMES } from "@/contexts/StockContext";
 import { useSystemStatus } from "@/hooks/useMarketData";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 import {
   Select,
   SelectContent,
@@ -17,8 +19,18 @@ import {
 const TopNav = () => {
   const { selectedStock, setSelectedStock } = useSelectedStock();
   const { data: status } = useSystemStatus();
+  const { profile, signOut, user } = useAuth();
 
   const isLive = status?.denoProxy && status?.aiEngine;
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+      toast.success("Signed out.");
+    } catch (error) {
+      toast.error("Failed to sign out.");
+    }
+  }
 
   return (
     <header className="h-16 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-6 flex-shrink-0">
@@ -93,9 +105,41 @@ const TopNav = () => {
           <Bell className="h-5 w-5 text-muted-foreground" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
         </button>
-        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
-          <User className="h-5 w-5 text-primary" />
-        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex items-center gap-3 rounded-full border border-border bg-muted/40 px-2 py-1.5 hover:bg-muted transition-colors">
+              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
+                <User className="h-5 w-5 text-primary" />
+              </div>
+              <div className="hidden text-left md:block">
+                <div className="max-w-[180px] truncate text-sm font-medium text-foreground">
+                  {profile?.full_name || user?.user_metadata?.full_name || user?.email || "Trader"}
+                </div>
+                <div className="max-w-[180px] truncate text-xs text-muted-foreground">
+                  {user?.email}
+                </div>
+              </div>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64" align="end">
+            <div className="space-y-3">
+              <div className="border-b border-border pb-3">
+                <div className="text-sm font-medium text-foreground">
+                  {profile?.full_name || user?.user_metadata?.full_name || "DOT-MARKET User"}
+                </div>
+                <div className="text-xs text-muted-foreground">{user?.email}</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
   );

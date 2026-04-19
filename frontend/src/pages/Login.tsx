@@ -1,18 +1,45 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { hasSupabaseAuthConfig } from "@/lib/env";
+import { toast } from "@/components/ui/sonner";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as { from?: string } | null)?.from || "/dashboard";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to dashboard for demo
-    window.location.href = "/dashboard";
+
+    if (!hasSupabaseAuthConfig()) {
+      toast.error("Supabase auth is not configured.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Signed in successfully.");
+    navigate(redirectTo, { replace: true });
   };
 
   return (
@@ -41,6 +68,8 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-12 bg-muted border-border"
+                autoComplete="email"
+                required
               />
             </div>
             <div>
@@ -52,6 +81,8 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-12 bg-muted border-border pr-12"
+                  autoComplete="current-password"
+                  required
                 />
                 <button
                   type="button"
@@ -63,8 +94,12 @@ const Login = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
-              Sign In
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+            >
+              {isSubmitting ? "Signing In..." : "Sign In"}
             </Button>
           </form>
 

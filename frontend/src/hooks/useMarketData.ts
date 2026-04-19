@@ -7,6 +7,7 @@ import {
   fetchStockNews,
 } from "@/lib/marketDataService";
 import { aiPredictionService } from "@/lib/aiPredictionService";
+import { getApiBaseUrl } from "@/lib/env";
 
 export const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'META', 'AMZN', 'BTC-USD'];
 
@@ -432,17 +433,16 @@ export interface SystemStatus {
   lastChecked: Date | null;
 }
 
-const BACKEND_URL = 'http://localhost:3000';
-
 export function useSystemStatus() {
   return useQuery<SystemStatus>({
     queryKey: ['system-status'],
     queryFn: async () => {
+      const apiBaseUrl = getApiBaseUrl();
       const [backend, models] = await Promise.all([
-        fetch(`${BACKEND_URL}/health`, { method: 'GET' })
+        fetch(`${apiBaseUrl}/health`, { method: 'GET' })
           .then(r => r.ok)
           .catch(() => false),
-        fetch(`${BACKEND_URL}/api/models`)
+        fetch(`${apiBaseUrl}/models`)
           .then(r => r.ok)
           .catch(() => false),
       ]);

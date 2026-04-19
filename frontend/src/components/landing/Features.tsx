@@ -26,7 +26,7 @@ const features = [
 
 const Features = () => {
   return (
-    <section className="py-32 relative">
+    <section id="features" className="py-32 relative scroll-mt-24">
       <div className="absolute inset-0 grid-bg opacity-20" />
       <div className="container mx-auto px-6 relative z-10">
         <motion.div

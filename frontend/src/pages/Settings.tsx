@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { AlertCircle, CheckCircle, Server, Save, Loader2 } from "lucide-react";
+import { getApiBaseUrl } from "@/lib/env";
 
 interface UserSettings {
   firstName: string;
@@ -21,7 +22,7 @@ const defaultSettings: UserSettings = {
   firstName: '',
   lastName: '',
   email: '',
-  apiUrl: 'http://localhost:3000',
+  apiUrl: getApiBaseUrl(),
   notifications: {
     priceAlerts: true,
     aiPredictions: true,
@@ -154,7 +155,7 @@ const Settings = () => {
                 value={settings.apiUrl} 
                 onChange={(e) => updateSetting('apiUrl', e.target.value)}
                 className="bg-muted border-border" 
-                placeholder="http://localhost:3000"
+                placeholder="https://your-deno-api.deno.dev"
               />
             </div>
           </div>

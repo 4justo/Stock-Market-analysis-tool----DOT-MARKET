@@ -1,15 +1,59 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { hasSupabaseAuthConfig } from "@/lib/env";
+import { toast } from "@/components/ui/sonner";
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    window.location.href = "/dashboard";
+
+    if (!hasSupabaseAuthConfig()) {
+      toast.error("Supabase auth is not configured.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const fullName = `${firstName} ${lastName}`.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
+        },
+      },
+    });
+
+    setIsSubmitting(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    if (data.session) {
+      toast.success("Account created. You are now signed in.");
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    toast.success("Account created. Check your email to confirm your account.");
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -33,16 +77,36 @@ const Register = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">First name</label>
-                <Input placeholder="John" className="h-12 bg-muted border-border" />
+                <Input
+                  placeholder="John"
+                  className="h-12 bg-muted border-border"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Last name</label>
-                <Input placeholder="Doe" className="h-12 bg-muted border-border" />
+                <Input
+                  placeholder="Doe"
+                  className="h-12 bg-muted border-border"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                />
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Email</label>
-              <Input type="email" placeholder="trader@example.com" className="h-12 bg-muted border-border" />
+              <Input
+                type="email"
+                placeholder="trader@example.com"
+                className="h-12 bg-muted border-border"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Password</label>
@@ -51,6 +115,11 @@ const Register = () => {
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   className="h-12 bg-muted border-border pr-12"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
                 />
                 <button
                   type="button"
@@ -61,8 +130,12 @@ const Register = () => {
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
-              Create Account
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+            >
+              {isSubmitting ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
 

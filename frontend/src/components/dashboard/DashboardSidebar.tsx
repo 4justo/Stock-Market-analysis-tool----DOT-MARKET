@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useSystemStatus } from "@/hooks/useMarketData";
+import { useWatchlist } from "@/hooks/useWatchlist";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -20,6 +21,7 @@ const DashboardSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { data: status } = useSystemStatus();
+  const { data: watchlist } = useWatchlist();
 
   const isLive = status?.denoProxy && status?.aiEngine;
 
@@ -35,13 +37,16 @@ const DashboardSidebar = () => {
 
       {/* Status Indicator */}
       <div className="px-3 py-2 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sidebar-accent/50">
-          <Circle
-            className={`w-2 h-2 ${isLive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500'}`}
-          />
-          <span className="text-xs font-medium text-sidebar-foreground">
-            {isLive ? 'System Online' : 'System Offline'}
-          </span>
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-sidebar-accent/50">
+          <div className="flex items-center gap-2">
+            <Circle
+              className={`w-2 h-2 ${isLive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500'}`}
+            />
+            <span className="text-xs font-medium text-sidebar-foreground">
+              {isLive ? 'System Online' : 'System Offline'}
+            </span>
+          </div>
+          {!collapsed && <span className="text-[11px] text-muted-foreground">{watchlist?.length || 0} saved</span>}
         </div>
       </div>
 

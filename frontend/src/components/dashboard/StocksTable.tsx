@@ -1,9 +1,26 @@
 import { useTopStocks } from "@/hooks/useMarketData";
-import { ArrowUp, ArrowDown, AlertCircle } from "lucide-react";
+import { useToggleWatchlist, useWatchlist } from "@/hooks/useWatchlist";
+import { ArrowUp, ArrowDown, AlertCircle, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/sonner";
 
 const StocksTable = () => {
   const { data: stocks, isLoading, error, refetch } = useTopStocks();
+  const { data: watchlist } = useWatchlist();
+  const toggleWatchlist = useToggleWatchlist();
+  const watchlistSymbols = new Set((watchlist || []).map((item) => item.symbol));
+
+  async function handleToggle(symbol: string) {
+    const isSaved = watchlistSymbols.has(symbol);
+
+    try {
+      const result = await toggleWatchlist.mutateAsync({ isSaved, symbol });
+      toast.success(result.action === "added" ? `${symbol} added to watchlist.` : `${symbol} removed from watchlist.`);
+    } catch (toggleError) {
+      const message = toggleError instanceof Error ? toggleError.message : "Failed to update watchlist.";
+      toast.error(message);
+    }
+  }
 
   if (error) {
     return (
@@ -27,6 +44,7 @@ const StocksTable = () => {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
+              <th className="text-left text-xs font-medium text-muted-foreground pb-3">Save</th>
               <th className="text-left text-xs font-medium text-muted-foreground pb-3">Ticker</th>
               <th className="text-right text-xs font-medium text-muted-foreground pb-3">Price</th>
               <th className="text-right text-xs font-medium text-muted-foreground pb-3">Predicted</th>
@@ -38,6 +56,7 @@ const StocksTable = () => {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border/50">
+                  <td className="py-3"><Skeleton className="h-5 w-5" /></td>
                   <td className="py-3"><Skeleton className="h-5 w-16" /></td>
                   <td className="py-3 text-right"><Skeleton className="h-5 w-16 ml-auto" /></td>
                   <td className="py-3 text-right"><Skeleton className="h-5 w-16 ml-auto" /></td>
@@ -48,6 +67,19 @@ const StocksTable = () => {
             ) : (
               stocks?.map((stock) => (
                 <tr key={stock.ticker} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(stock.ticker)}
+                      disabled={toggleWatchlist.isPending}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                      aria-label={`Toggle ${stock.ticker} watchlist`}
+                    >
+                      <Star
+                        className={`h-4 w-4 ${watchlistSymbols.has(stock.ticker) ? "fill-primary text-primary" : "text-muted-foreground"}`}
+                      />
+                    </button>
+                  </td>
                   <td className="py-3">
                     <div className="font-semibold text-sm text-foreground">{stock.ticker}</div>
                     <div className="text-xs text-muted-foreground">{stock.name}</div>

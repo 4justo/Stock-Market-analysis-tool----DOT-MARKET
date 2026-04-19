@@ -35,7 +35,7 @@ const plans = [
 
 const Pricing = () => {
   return (
-    <section className="py-32 relative" id="pricing">
+    <section className="py-32 relative scroll-mt-24" id="pricing">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[150px]" />
       <div className="container mx-auto px-6 relative z-10">
         <motion.div

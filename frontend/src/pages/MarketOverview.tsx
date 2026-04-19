@@ -1,14 +1,31 @@
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useMarketIndices, useSectorPerformance, useTopStocks } from "@/hooks/useMarketData";
-import { ArrowUp, ArrowDown, TrendingUp, AlertCircle } from "lucide-react";
+import { useToggleWatchlist, useWatchlist } from "@/hooks/useWatchlist";
+import { ArrowUp, ArrowDown, TrendingUp, AlertCircle, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/sonner";
 
 const MarketOverview = () => {
   const { data: indices, isLoading: indicesLoading, error: indicesError, refetch: refetchIndices } = useMarketIndices();
   const { data: sectors, isLoading: sectorsLoading, error: sectorsError, refetch: refetchSectors } = useSectorPerformance();
   const { data: stocks, isLoading: stocksLoading, error: stocksError, refetch: refetchStocks } = useTopStocks();
+  const { data: watchlist } = useWatchlist();
+  const toggleWatchlist = useToggleWatchlist();
+  const watchlistSymbols = new Set((watchlist || []).map((item) => item.symbol));
 
   const hasError = indicesError || sectorsError || stocksError;
+
+  async function handleToggle(symbol: string) {
+    const isSaved = watchlistSymbols.has(symbol);
+
+    try {
+      const result = await toggleWatchlist.mutateAsync({ isSaved, symbol });
+      toast.success(result.action === "added" ? `${symbol} added to watchlist.` : `${symbol} removed from watchlist.`);
+    } catch (toggleError) {
+      const message = toggleError instanceof Error ? toggleError.message : "Failed to update watchlist.";
+      toast.error(message);
+    }
+  }
 
   if (hasError) {
     return (
@@ -112,9 +129,22 @@ const MarketOverview = () => {
                 ))
               : stocks?.slice(0, 6).map((s) => (
                   <div key={s.ticker} className="flex items-center justify-between py-2 border-b border-border/30">
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">{s.ticker}</div>
-                      <div className="text-xs text-muted-foreground">{s.name}</div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggle(s.ticker)}
+                        disabled={toggleWatchlist.isPending}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-primary"
+                        aria-label={`Toggle ${s.ticker} watchlist`}
+                      >
+                        <Star
+                          className={`h-4 w-4 ${watchlistSymbols.has(s.ticker) ? "fill-primary text-primary" : "text-muted-foreground"}`}
+                        />
+                      </button>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{s.ticker}</div>
+                        <div className="text-xs text-muted-foreground">{s.name}</div>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-foreground">${s.price.toFixed(2)}</div>
@@ -129,6 +159,30 @@ const MarketOverview = () => {
                 ))}
           </div>
         </div>
+      </div>
+
+      <div className="glass-card p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-foreground">Your Watchlist</h3>
+          <span className="text-xs text-muted-foreground">{watchlist?.length || 0} saved</span>
+        </div>
+        {!watchlist?.length ? (
+          <p className="text-sm text-muted-foreground">Save stocks with the star icon to build your personal watchlist.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {watchlist.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleToggle(item.symbol)}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+              >
+                <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+                {item.symbol}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

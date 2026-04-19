@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { StockProvider } from "@/contexts/StockContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute, PublicOnlyRoute } from "@/components/auth/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -21,25 +23,27 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <StockProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/portfolio" element={<Portfolio />} />
-            <Route path="/market" element={<MarketOverview />} />
-            <Route path="/predictions" element={<Predictions />} />
-            <Route path="/insights" element={<AIInsights />} />
-            <Route path="/backtesting" element={<Backtesting />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </StockProvider>
+      <AuthProvider>
+        <StockProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+              <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+              <Route path="/market" element={<ProtectedRoute><MarketOverview /></ProtectedRoute>} />
+              <Route path="/predictions" element={<ProtectedRoute><Predictions /></ProtectedRoute>} />
+              <Route path="/insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
+              <Route path="/backtesting" element={<ProtectedRoute><Backtesting /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </StockProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

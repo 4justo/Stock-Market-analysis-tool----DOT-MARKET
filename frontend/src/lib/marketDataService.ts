@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "@/lib/env";
+
 export interface StockQuote {
   ticker: string;
   price: number;
@@ -39,11 +41,10 @@ export interface BatchQuote {
   previousClose: number;
 }
 
-const BACKEND_API = 'http://localhost:3000';
-
 async function fetchFromBackend(params: Record<string, string>): Promise<any> {
+  const backendApi = getApiBaseUrl();
   const queryString = new URLSearchParams(params).toString();
-  const url = `${BACKEND_API}/api/yahoo/${params.endpoint}?${queryString}`;
+  const url = `${backendApi}/yahoo/${params.endpoint}?${queryString}`;
   
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -99,6 +100,7 @@ export async function fetchIntradayCandles(symbol: string): Promise<CandleData[]
 }
 
 export async function fetchBatchQuotes(symbols: string[]): Promise<BatchQuote[]> {
+  const backendApi = getApiBaseUrl();
   const results: BatchQuote[] = [];
   
   for (const symbol of symbols) {
@@ -113,7 +115,7 @@ export async function fetchBatchQuotes(symbols: string[]): Promise<BatchQuote[]>
     
     try {
       // Try to get real data from proxy
-      const response = await fetch(`${BACKEND_API}/api/yahoo/chart?symbol=${symbolUpper}&range=5d`);
+      const response = await fetch(`${backendApi}/yahoo/chart?symbol=${symbolUpper}&range=5d`);
       if (response.ok) {
         const data = await response.json();
         const meta = data?.chart?.result?.[0]?.meta;

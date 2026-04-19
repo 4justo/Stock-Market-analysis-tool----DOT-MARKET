@@ -1,4 +1,4 @@
-const BACKEND_API = 'http://localhost:3000';
+import { getApiBaseUrl } from "@/lib/env";
 
 export interface PredictionRequest {
   symbol: string;
@@ -69,7 +69,7 @@ export interface ModelsResponse {
 class AIPredictionService {
   async predict(request: PredictionRequest): Promise<PredictionResponse> {
     try {
-      const response = await fetch(`${BACKEND_API}/predict`, {
+      const response = await fetch(`${getApiBaseUrl()}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -95,7 +95,7 @@ class AIPredictionService {
         ? JSON.stringify({ symbol: symbolText })
         : JSON.stringify({ text: symbolText });
       
-      const response = await fetch(`${BACKEND_API}/sentiment`, {
+      const response = await fetch(`${getApiBaseUrl()}/sentiment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
@@ -131,7 +131,7 @@ class AIPredictionService {
   }
 
   async runBacktest(request: BacktestRequest): Promise<BacktestResponse> {
-    const response = await fetch(`${BACKEND_API}/backtest`, {
+    const response = await fetch(`${getApiBaseUrl()}/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
